@@ -1,0 +1,95 @@
+function class = neural_function(a,b,c,d)
+X = [a b c d]';
+
+% ===== NEURAL NETWORK CONSTANTS =====
+
+% Input 1
+x1_step1_xoffset = [4.3;2;1;0.1];
+x1_step1_gain = [0.555555555555555;0.833333333333333;0.338983050847458;0.833333333333333];
+x1_step1_ymin = -1;
+
+% Layer 1
+b1 = [0.44960080068293906;1.0698710033408685;1.4969659334774157;2.3163688530676136;0.15197627385954066;-0.31297078907427278;0.39767140874946849;-5.4475293553127768;1.2638236940702445;-0.29598828873726796];
+IW1_1 = [0.19449695960625338 -0.81748592247333729 0.84432576660354886 1.2358483964765248;0.28928754281537244 -1.0268900106884487 1.9447015568086483 1.7388218185851108;-1.8159679081505351 4.3744796516002342 -2.6370167763379464 -1.0608051831940069;5.1051717711146738 0.53176325771366295 -9.076569162477707 -1.2347199317667419;5.2856659740882188 4.2433787955190692 2.8161393462451745 1.4895167977378747;-0.33529938220852351 0.66891848142822297 -1.1090688226999705 -0.78841359251024934;-0.23557384973830425 0.60536214395713794 0.11548772059626568 -0.89518195708220272;-1.7684421537159412 -5.7271581089730503 -3.0710413426780399 13.932305329758076;-4.3746759728127955 -0.7262712138667754 -7.8384593853704727 7.86543597256395;0.54407857551639116 -0.21776112728654917 0.9749819981854756 0.50015099177672162];
+
+% Layer 2
+b2 = [1.9249191452118997;-1.6868009548702461;-0.23774928780873028];
+LW2_1 = [-2.2423472496664929 -3.6606692129564187 3.0993775985428216 2.6089836902267893 -2.5484804503621001 2.4462170084126877 1.5240020364795992 -1.9926710071142792 2.385671413920766 -2.517756473275226;1.8241942281554551 3.7667727229850865 0.85776663319341528 6.4468573490904095 -2.5035551232090576 -1.5885321669670385 -1.4628473194004599 -8.4117411406464146 6.3167353542144582 1.1358189228801208;0.41696987389809725 -0.10658829954309468 -3.9572620015816256 -9.0555701135989803 5.0508886820108341 -0.85734673719431709 -0.060785148219782259 10.405259515573983 -8.7031685070630971 1.3821165446670465];
+
+% ===== SIMULATION ========
+
+% Format Input Arguments
+isCellX = iscell(X);
+if ~isCellX, X = {X}; end;
+
+% Dimensions
+TS = size(X,2); % timesteps
+if ~isempty(X)
+    Q = size(X{1},2); % samples/series
+else
+    Q = 0;
+end
+
+% Allocate Outputs
+Y = cell(1,TS);
+
+% Time loop
+for ts=1:TS
+
+    % Input 1
+    Xp1 = mapminmax_apply(X{1,ts},x1_step1_gain,x1_step1_xoffset,x1_step1_ymin);
+    
+    % Layer 1
+    a1 = tansig_apply(repmat(b1,1,Q) + IW1_1*Xp1);
+    
+    % Layer 2
+    a2 = softmax_apply(repmat(b2,1,Q) + LW2_1*a1);
+    
+    % Output 1
+    Y{1,ts} = a2;
+end
+
+% Final Delay States
+Xf = cell(1,0);
+Af = cell(2,0);
+
+% Format Output Arguments
+if ~isCellX, Y = cell2mat(Y); end
+
+resultInCell = [Y,Xf,Af];
+resultInMat = cell2mat(resultInCell);
+result = vec2ind(resultInMat);
+
+if result == 1
+    class = 'Iris-setosa';
+elseif result == 2
+    class = 'Iris-versicolor';
+else
+    class = 'Iris-virginica';
+end
+
+end
+
+% ===== MODULE FUNCTIONS ========
+
+% Map Minimum and Maximum Input Processing Function
+function y = mapminmax_apply(x,settings_gain,settings_xoffset,settings_ymin)
+y = bsxfun(@minus,x,settings_xoffset);
+y = bsxfun(@times,y,settings_gain);
+y = bsxfun(@plus,y,settings_ymin);
+end
+
+% Competitive Soft Transfer Function
+function a = softmax_apply(n)
+nmax = max(n,[],1);
+n = bsxfun(@minus,n,nmax);
+numer = exp(n);
+denom = sum(numer,1); 
+denom(denom == 0) = 1;
+a = bsxfun(@rdivide,numer,denom);
+end
+
+% Sigmoid Symmetric Transfer Function
+function a = tansig_apply(n)
+a = 2 ./ (1 + exp(-2*n)) - 1;
+end
